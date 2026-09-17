@@ -1,0 +1,81 @@
+-- Ordering versions: the crate's `impl Ord`s in `src/impls.rs`, and the
+-- derived one on `Version`, which compares build metadata last.
+--
+-- Copyright David Tolnay, and the Meadow port's authors. Dual-licensed under
+-- Apache-2.0 or MIT: see COPYRIGHT.
+
+use Std.Collections.Vector as V
+use Std.String as S
+use semver.Types (Version)
+
+fun isDigit c = charCode c >= 48 and charCode c <= 57
+
+fun allDigits s = V.all isDigit (V.fromArray (stringToChars s))
+
+fun orElse first next = if first == Equal then next () else first
+
+-- Compare `a` and `b` a dot-separated identifier at a time, `each` comparing
+-- a pair; more identifiers win when the others are equal.
+fun byIdentifiers each a b =
+  let xs = S.split "." a in
+  let ys = S.split "." b in
+  let rec go k =
+    if k >= V.len xs
+    then (if k >= V.len ys then Equal else Less)
+    else if k >= V.len ys
+    then Greater
+    else
+      let o = each (V.getOr "" xs k) (V.getOr "" ys k) in
+      if o == Equal then go (k + 1) else o
+  in
+  go 0
+
+fun preIdentifier x y =
+  match (allDigits x, allDigits y) with
+  | (True, True) -> orElse (compare (stringByteLength x) (stringByteLength y)) (\_ -> S.compare x y)
+  | (True, False) -> Less
+  | (False, True) -> Greater
+  | (False, False) -> S.compare x y
+
+fun trimZeros s =
+  let zero = toUInt8 48 in
+  let rec go i = if i < stringByteLength s and stringByteAt s i == zero then go (i + 1) else i in
+  stringSlice s (go 0) (stringByteLength s)
+
+fun buildIdentifier x y =
+  match (allDigits x, allDigits y) with
+  | (True, True) ->
+      -- 0 < 00 < 1 < 01 < 001 < 2 < 02 < 002 < 10
+      let xv = trimZeros x in
+      let yv = trimZeros y in
+      orElse
+      (compare (stringByteLength xv) (stringByteLength yv))
+      (\_ -> orElse (S.compare xv yv) (\_ -> compare (stringByteLength x) (stringByteLength y)))
+  | (True, False) -> Less
+  | (False, True) -> Greater
+  | (False, False) -> S.compare x y
+
+-- How two pre-releases order: no pre-release at all is greatest; numeric
+-- identifiers compare as numbers and before any others.
+@pub fun comparePrerelease a b =
+  if a == b
+  then Equal
+  else if a == ""
+  then Greater
+  else if b == ""
+  then Less
+  else byIdentifiers preIdentifier a b
+
+-- How two sets of build metadata order. SemVer gives build metadata no
+-- precedence, but the crate orders it so that versions sort totally.
+@pub fun compareBuildMetadata a b = if a == b then Equal else byIdentifiers buildIdentifier a b
+
+-- How `a` and `b` order by SemVer precedence: build metadata is ignored.
+@pub fun comparePrecedence (a : Version) (b : Version) =
+  let byPatch = \_ -> orElse (compare a.patch b.patch) (\_ -> comparePrerelease a.pre b.pre) in
+  orElse (compare a.major b.major) (\_ -> orElse (compare a.minor b.minor) byPatch)
+
+-- How `a` and `b` order: by precedence, then by build metadata, so that two
+-- versions are `Equal` only if they are the same.
+@pub fun compareVersions (a : Version) (b : Version) =
+  orElse (comparePrecedence a b) (\_ -> compareBuildMetadata a.build b.build)

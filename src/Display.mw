@@ -1,0 +1,42 @@
+-- Writing versions and requirements as text: the crate's `src/display.rs`.
+--
+-- Copyright David Tolnay, and the Meadow port's authors. Dual-licensed under
+-- Apache-2.0 or MIT: see COPYRIGHT.
+
+use Std.Collections.Vector as V
+use Std.String as S
+use semver.Types (Version, Comparator, VersionReq, Op)
+
+-- `1.2.3-alpha+build`.
+@pub fun versionText (v : Version) =
+  let pre = if v.pre == "" then "" else "-" ++ v.pre in
+  let build = if v.build == "" then "" else "+" ++ v.build in
+  "${v.major}.${v.minor}.${v.patch}${pre}${build}"
+
+fun opText op =
+  match op with
+  | Op.Exact -> "="
+  | Op.Greater -> ">"
+  | Op.GreaterEq -> ">="
+  | Op.Less -> "<"
+  | Op.LessEq -> "<="
+  | Op.Tilde -> "~"
+  | Op.Caret -> "^"
+  | Op.Wildcard -> ""
+
+-- `>=1.2`, `1.*`, `^1.2.3-rc`.
+@pub fun comparatorText (c : Comparator) =
+  let wild = if c.op == Op.Wildcard then ".*" else "" in
+  let rest =
+    match c.minor with
+    | None -> wild
+    | Just minor ->
+        match c.patch with
+        | Just patch -> ".${minor}.${patch}" ++ (if c.pre == "" then "" else "-" ++ c.pre)
+        | None -> ".${minor}" ++ wild
+  in
+  opText c.op ++ "${c.major}" ++ rest
+
+-- The comparators joined with `, `, or `*` for none.
+@pub fun versionReqText (r : VersionReq) =
+  if V.isEmpty r.comparators then "*" else S.join ", " (V.map comparatorText r.comparators)

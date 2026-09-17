@@ -1,0 +1,38 @@
+-- semver: parsing, ordering and matching Semantic Versioning 2.0 versions, and
+-- version requirements in Cargo's syntax.
+--
+-- A port of Rust's `semver` crate, version 1.0.28. The tests hold it to the
+-- crate's answers, error messages included, for thousands of inputs.
+--
+--   use semver
+--
+--   match (parseVersionReq ">=1.2.3, <1.8.0", parseVersion "1.4.0") with
+--   | (Ok req, Ok v) -> matches req v  -- True
+
+mod Tables
+mod Escape
+mod Types
+mod Parse
+mod Order
+mod Eval
+mod Display
+@cfg(test)
+mod Cases
+@cfg(test)
+mod Tests
+
+@pub use semver.Types (
+  Version,
+  version,
+  Op,
+  Comparator,
+  VersionReq,
+  star,
+  Position,
+  Error,
+  errorMessage
+)
+@pub use semver.Parse (parseVersion, parseVersionReq, parseComparator, prerelease, buildMetadata)
+@pub use semver.Order (compareVersions, comparePrecedence, comparePrerelease, compareBuildMetadata)
+@pub use semver.Eval (matches, matchesComparator)
+@pub use semver.Display (versionText, comparatorText, versionReqText)

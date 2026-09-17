@@ -1,0 +1,235 @@
+-- The port against the crate: every case in `Cases.mw`, whose expected results
+-- came from calling semver itself, plus a few examples.
+--
+-- Every declaration carries `@cfg(test)`, as the tests are no part of the
+-- package.
+
+@cfg(test)
+use Std.Test (assertEq)
+@cfg(test)
+use Std.Collections.Vector as V
+@cfg(test)
+use Std.String as S
+@cfg(test)
+use semver.Cases (cases)
+@cfg(test)
+use semver.Types
+@cfg(test)
+use semver.Parse
+@cfg(test)
+use semver.Order
+@cfg(test)
+use semver.Eval
+@cfg(test)
+use semver.Display
+
+@cfg(test)
+fun digit i = toInt (stringByteAt cases i) - 48
+
+-- An `n`-digit number at `i`, and where it ends.
+@cfg(test)
+fun num i n =
+  let rec go k acc = if k >= n then acc else go (k + 1) (acc * 64 + digit (i + k)) in
+  (go 0 0, i + n)
+
+-- A string at `i`, and where it ends.
+@cfg(test)
+fun str i =
+  let len = fst (num i 3) in
+  (stringSlice cases (i + 3) (i + 3 + len), i + 3 + len)
+
+-- `n` strings from `i`, and where they end.
+@cfg(test)
+fun strs i n =
+  let rec go k at acc =
+    if k >= n
+    then (acc, at)
+    else
+      let s = str at in
+      go (k + 1) (snd s) (V.pushBack acc (fst s))
+  in
+  go 0 i V.empty
+
+@cfg(test)
+fun opIndex op =
+  match op with
+  | Op.Exact -> 0
+  | Op.Greater -> 1
+  | Op.GreaterEq -> 2
+  | Op.Less -> 3
+  | Op.LessEq -> 4
+  | Op.Tilde -> 5
+  | Op.Caret -> 6
+  | Op.Wildcard -> 7
+
+@cfg(test)
+fun optText m =
+  match m with
+  | Just n -> "${n}"
+  | None -> "-"
+
+@cfg(test)
+fun comparatorFields (c : Comparator) =
+  ["${opIndex c.op}", "${c.major}", optText c.minor, optText c.patch, c.pre, comparatorText c]
+
+-- A comparator at `i` as the same fields, and where it ends.
+@cfg(test)
+fun readComparator i =
+  let op = num i 1 in
+  let rest = strs (snd op) 5 in
+  (V.pushFront (fst rest) "${fst op}", snd rest)
+
+-- A parse result at `i`, as fields -- `ok` reads a success -- and where it
+-- ends.
+@cfg(test)
+fun readResult i ok =
+  let flag = num i 1 in
+  if fst flag == 1
+  then
+    let r = ok (snd flag) in
+    (V.pushFront (fst r) "ok", snd r)
+  else
+    let e = str (snd flag) in
+    (["error", fst e], snd e)
+
+@cfg(test)
+fun resultFields r fields =
+  match r with
+  | Ok x -> V.pushFront (fields x) "ok"
+  | Err e -> ["error", errorMessage e]
+
+@cfg(test)
+fun readReq i =
+  let n = num i 2 in
+  let rec go k at acc =
+    if k >= fst n
+    then
+      let d = str at in
+      (V.pushBack (V.pushFront acc "${fst n}") (fst d), snd d)
+    else
+      let c = readComparator at in
+      go (k + 1) (snd c) (V.append acc (fst c))
+  in
+  go 0 (snd n) V.empty
+
+@cfg(test)
+fun reqFields (r : VersionReq) =
+  V.pushBack
+    (V.pushFront (V.concatMap comparatorFields r.comparators) "${V.len r.comparators}")
+    (versionReqText r)
+
+@cfg(test)
+fun versionFields (v : Version) =
+  ["${v.major}", "${v.minor}", "${v.patch}", v.pre, v.build, versionText v]
+
+@cfg(test)
+fun ordIndex o =
+  match o with
+  | Less -> 0
+  | Equal -> 1
+  | Greater -> 2
+
+@cfg(test)
+fun unwrap r =
+  match r with
+  | Ok v -> v
+  | Err e -> version 0 0 0
+
+@cfg(test)
+fun unwrapReq r =
+  match r with
+  | Ok v -> v
+  | Err e -> star
+
+-- One case at `i`: `(input, expected, actual, next)`.
+@cfg(test)
+fun runCase i =
+  let kind = fst (num i 1) in
+  if kind == 0
+  then
+    let t = str (i + 1) in
+    let s = fst t in
+    let v = readResult (snd t) (\at -> strs at 6) in
+    let r = readResult (snd v) readReq in
+    let c = readResult (snd r) readComparator in
+    let p = readResult (snd c) (\at -> strs at 1) in
+    let b = readResult (snd p) (\at -> strs at 1) in
+    let expected = [fst v, fst r, fst c, fst p, fst b] in
+    let actual =
+      [
+        resultFields (parseVersion s) versionFields,
+        resultFields (parseVersionReq s) reqFields,
+        resultFields (parseComparator s) comparatorFields,
+        resultFields (prerelease s) (\x -> [x]),
+        resultFields (buildMetadata s) (\x -> [x])
+      ]
+    in
+    (s, expected, actual, snd b)
+  else if kind == 1
+  then
+    let a = str (i + 1) in
+    let b = str (snd a) in
+    let o = strs (snd b) 0 in
+    let at = snd o in
+    let expected = [V.map (\k -> "${fst (num (at + k) 1)}") (V.range 0 4)] in
+    let va = unwrap (parseVersion (fst a)) in
+    let vb = unwrap (parseVersion (fst b)) in
+    let actual =
+      [
+        V.map
+          (\o2 -> "${ordIndex o2}")
+          [
+            compareVersions va vb,
+            comparePrecedence va vb,
+            comparePrerelease va.pre vb.pre,
+            compareBuildMetadata va.build vb.build
+          ]
+      ]
+    in
+    (fst a ++ " vs " ++ fst b, expected, actual, at + 4)
+  else
+    let r = str (i + 1) in
+    let v = str (snd r) in
+    let m = num (snd v) 1 in
+    let n = num (snd m) 2 in
+    let each = V.map (\k -> "${fst (num (snd n + k) 1)}") (V.range 0 (fst n)) in
+    let expected = [V.pushFront each "${fst m}"] in
+    let req = unwrapReq (parseVersionReq (fst r)) in
+    let ver = unwrap (parseVersion (fst v)) in
+    let flag = \b -> if b then "1" else "0" in
+    let each = V.map (\c -> flag (matchesComparator c ver)) req.comparators in
+    let actual = [V.pushFront each (flag (matches req ver))] in
+    (fst r ++ " ~ " ++ fst v, expected, actual, snd n + fst n)
+
+@cfg(test)
+fun check i bad =
+  if i >= stringByteLength cases
+  then bad
+  else
+    match runCase i with
+    | (input, expected, got, next) ->
+        check next (if expected == got then bad else V.pushBack bad (input, expected, got))
+
+-- Failures list (input, expected, actual).
+@cfg(test)
+@test fun resultsMatchTheCrate () =
+  assertEq (V.take (check 0 V.empty) 3) [] "cases where the port and semver differ"
+
+@cfg(test)
+@test fun examples () =
+  let req = unwrapReq (parseVersionReq ">=1.2.3, <1.8.0") in
+  let a = assertEq (matches req (unwrap (parseVersion "1.4.0"))) True "in range" in
+  let b = assertEq (matches req (unwrap (parseVersion "1.8.0"))) False "out of range" in
+  let rc = unwrap (parseVersion "1.4.0-rc.1") in
+  let c = assertEq (matches req rc) False "a pre-release needs asking for" in
+  let d = assertEq (versionReqText (unwrapReq (parseVersionReq "1.2"))) "^1.2" "caret by default" in
+  let e = assertEq (S.compare "a" "b") Less "strings" in
+  let f =
+    assertEq
+      (compareVersions (unwrap (parseVersion "1.0.0-a.10")) (unwrap (parseVersion "1.0.0-a.9")))
+      Greater
+      "numeric identifiers"
+  in
+  match parseVersion "1.2.03" with
+  | Err err -> assertEq (errorMessage err) "invalid leading zero in patch version number" "error"
+  | Ok v -> assertEq (versionText v) "an error" "error"

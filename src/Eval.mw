@@ -1,0 +1,123 @@
+-- Matching versions against requirements: the crate's `src/eval.rs`.
+--
+-- Copyright David Tolnay, and the Meadow port's authors. Dual-licensed under
+-- Apache-2.0 or MIT: see COPYRIGHT.
+
+use Std.Collections.Vector as V
+use semver.Types (Version, Comparator, VersionReq, Op)
+use semver.Order (comparePrerelease)
+
+fun preCompare (v : Version) (c : Comparator) = comparePrerelease v.pre c.pre
+
+fun matchesExact (c : Comparator) (v : Version) =
+  v.major == c.major
+    and (
+      match c.minor with
+      | Just m -> v.minor == m
+      | None -> True
+    )
+    and (
+      match c.patch with
+      | Just p -> v.patch == p
+      | None -> True
+    )
+    and v.pre == c.pre
+
+fun matchesGreater (c : Comparator) (v : Version) =
+  if v.major != c.major
+  then v.major > c.major
+  else
+    match c.minor with
+    | None -> False
+    | Just minor ->
+        if v.minor != minor
+        then v.minor > minor
+        else
+          match c.patch with
+          | None -> False
+          | Just patch -> if v.patch != patch then v.patch > patch else preCompare v c == Greater
+
+fun matchesLess (c : Comparator) (v : Version) =
+  if v.major != c.major
+  then v.major < c.major
+  else
+    match c.minor with
+    | None -> False
+    | Just minor ->
+        if v.minor != minor
+        then v.minor < minor
+        else
+          match c.patch with
+          | None -> False
+          | Just patch -> if v.patch != patch then v.patch < patch else preCompare v c == Less
+
+fun matchesTilde (c : Comparator) (v : Version) =
+  if v.major != c.major
+  then False
+  else if (
+  match c.minor with
+  | Just m -> v.minor != m
+  | None -> False
+  )
+then False
+else
+  match c.patch with
+  | Just patch -> if v.patch != patch then v.patch > patch else preCompare v c != Less
+  | None -> preCompare v c != Less
+
+fun matchesCaret (c : Comparator) (v : Version) =
+  let zero = toUInt64 0 in
+  if v.major != c.major
+  then False
+  else
+    match c.minor with
+    | None -> True
+    | Just minor ->
+        match c.patch with
+        | None -> if c.major > zero then v.minor >= minor else v.minor == minor
+        | Just patch ->
+            if c.major > zero
+            then
+              if v.minor != minor
+              then v.minor > minor
+              else if v.patch != patch
+              then v.patch > patch
+              else preCompare v c != Less
+            else if minor > zero
+            then
+              if v.minor != minor
+              then False
+              else if v.patch != patch
+              then v.patch > patch
+              else preCompare v c != Less
+            else if v.minor != minor or v.patch != patch
+            then False
+            else preCompare v c != Less
+
+fun matchesImpl (c : Comparator) (v : Version) =
+  match c.op with
+  | Op.Exact -> matchesExact c v
+  | Op.Wildcard -> matchesExact c v
+  | Op.Greater -> matchesGreater c v
+  | Op.GreaterEq -> matchesExact c v or matchesGreater c v
+  | Op.Less -> matchesLess c v
+  | Op.LessEq -> matchesExact c v or matchesLess c v
+  | Op.Tilde -> matchesTilde c v
+  | Op.Caret -> matchesCaret c v
+
+-- Whether a comparator with a pre-release names `v`'s release exactly, which is
+-- what lets a pre-release version match at all.
+fun preIsCompatible (c : Comparator) (v : Version) =
+  c.major == v.major and c.minor == Just v.minor and c.patch == Just v.patch and c.pre != ""
+
+-- Whether `v` satisfies every comparator of `req`. A pre-release satisfies a
+-- requirement only if some comparator names its release with a pre-release
+-- of its own: `>=1.0.0` is not satisfied by `1.1.0-alpha`, but
+-- `>=1.1.0-beta` is by `1.1.0-rc`.
+@pub fun matches (req : VersionReq) (v : Version) =
+  V.all (\c -> matchesImpl c v) req.comparators
+    and (v.pre == "" or V.any (\c -> preIsCompatible c v) req.comparators)
+
+-- Whether `v` satisfies the one comparator `c`, by the same rule.
+@pub fun matchesComparator (c : Comparator) (v : Version) =
+  matchesImpl c v and (v.pre == "" or preIsCompatible c v)

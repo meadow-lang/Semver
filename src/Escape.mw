@@ -1,0 +1,23 @@
+-- Which characters Rust's `{:?}` writes as `\u{…}`, from `Tables.mw`.
+
+use semver.Tables (escaped)
+
+fun digit i = toInt (stringByteAt escaped i) - 48
+
+fun pair i = digit i * 64 + digit (i + 1)
+
+fun codePoint i = pair i * 4096 + pair (i + 2)
+
+fun searchFrom cp lo hi =
+  if lo >= hi
+  then False
+  else
+    let mid = (lo + hi) / 2 in
+    let at = mid * 8 in
+    if cp < codePoint at
+    then searchFrom cp lo mid
+    else if cp > codePoint (at + 4)
+    then searchFrom cp (mid + 1) hi
+    else True
+
+@pub(pkg) fun isEscaped cp = searchFrom cp 0 (stringByteLength escaped / 8)

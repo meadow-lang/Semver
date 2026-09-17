@@ -1,0 +1,136 @@
+-- The crate's types, and its error messages word for word.
+--
+-- Where the crate wraps pre-release and build identifiers in types of their
+-- own, this port keeps them as `String`s that `prerelease` and
+-- `buildMetadata` have checked, and compares them with `comparePrerelease`
+-- and `compareBuildMetadata`.
+--
+-- Copyright David Tolnay, and the Meadow port's authors. Dual-licensed under
+-- Apache-2.0 or MIT: see COPYRIGHT.
+
+use semver.Escape (isEscaped)
+
+-- A version, as SemVer 2.0 defines one: `1.2.3-alpha.1+build.5`. `pre` and
+-- `build` are empty when the version has none.
+@pub record Version = {
+  major : UInt64,
+  minor : UInt64,
+  patch : UInt64,
+  pre : String,
+  build : String
+}
+
+-- `major.minor.patch`, with no pre-release or build metadata.
+@pub fun version major minor patch =
+  Version {
+    major = toUInt64 major,
+    minor = toUInt64 minor,
+    patch = toUInt64 patch,
+    pre = "",
+    build = ""
+  }
+
+-- How a comparator compares.
+@pub data Op =
+  -- `=I.J.K`: exactly this version; `=I.J` and `=I` any version they start.
+  Exact
+  -- `>I.J.K`, `>I.J`, `>I`
+  | Greater
+  -- `>=I.J.K`, `>=I.J`, `>=I`
+  | GreaterEq
+  -- `<I.J.K`, `<I.J`, `<I`
+  | Less
+  -- `<=I.J.K`, `<=I.J`, `<=I`
+  | LessEq
+  -- `~I.J.K`: at least I.J.K, below I.(J+1).0; `~I.J`, `~I` alike.
+  | Tilde
+  -- `^I.J.K`, or plain `I.J.K`: no change to the leftmost non-zero part.
+  | Caret
+  -- `I.J.*`, `I.*`
+  | Wildcard
+
+-- One part of a requirement, such as `>=1.2`.
+@pub record Comparator = {
+  op : Op,
+  major : UInt64,
+  minor : Maybe UInt64,
+  patch : Maybe UInt64,
+  pre : String
+}
+
+-- A requirement: the comparators a version has to satisfy, all of them. None
+-- at all is `*`, which every release satisfies.
+@pub record VersionReq = { comparators : [Comparator] }
+
+@pub def star = VersionReq { comparators = [] }
+
+-- Where in a version the parser was.
+@pub data Position = Major | Minor | Patch | Pre | Build
+
+@pub data Error =
+  Empty
+  | UnexpectedEnd Position
+  | UnexpectedChar Position Char
+  | UnexpectedCharAfter Position Char
+  | ExpectedCommaFound Position Char
+  | LeadingZero Position
+  | Overflow Position
+  | EmptySegment Position
+  | IllegalCharacter Position
+  | WildcardNotTheOnlyComparator Char
+  | UnexpectedAfterWildcard
+  | ExcessiveComparators
+
+fun positionText p =
+  match p with
+  | Position.Major -> "major version number"
+  | Position.Minor -> "minor version number"
+  | Position.Patch -> "patch version number"
+  | Position.Pre -> "pre-release identifier"
+  | Position.Build -> "build metadata"
+
+fun hexDigits n =
+  let d = n % 16 in
+  let c = if d < 10 then charFromCode (48 + d) else charFromCode (87 + d) in
+  let rest = if n >= 16 then hexDigits (n / 16) else "" in
+  rest ++ charsToString #[c]
+
+-- `c` as Rust's `{:?}` writes it, except that NUL is `'\0'`, as the crate
+-- makes it.
+@pub(pkg) fun quoted c =
+  let cp = charCode c in
+  let body =
+    if cp == 0
+    then "\\0"
+    else if cp == 9
+    then "\\t"
+    else if cp == 13
+    then "\\r"
+    else if cp == 10
+    then "\\n"
+    else if cp == 92
+    then "\\\\"
+    else if cp == 39
+    then "\\'"
+    else if isEscaped cp
+    then "\\u{" ++ hexDigits cp ++ "}"
+    else charsToString #[c]
+  in
+  "'" ++ body ++ "'"
+
+-- What went wrong, as the crate says it.
+@pub fun errorMessage e =
+  match e with
+  | Error.Empty -> "empty string, expected a semver version"
+  | Error.UnexpectedEnd p -> "unexpected end of input while parsing ${positionText p}"
+  | Error.UnexpectedChar p c -> "unexpected character ${quoted c} while parsing ${positionText p}"
+  | Error.UnexpectedCharAfter p c -> "unexpected character ${quoted c} after ${positionText p}"
+  | Error.ExpectedCommaFound p c -> "expected comma after ${positionText p}, found ${quoted c}"
+  | Error.LeadingZero p -> "invalid leading zero in ${positionText p}"
+  | Error.Overflow p -> "value of ${positionText p} exceeds u64::MAX"
+  | Error.EmptySegment p -> "empty identifier segment in ${positionText p}"
+  | Error.IllegalCharacter p -> "unexpected character in ${positionText p}"
+  | Error.WildcardNotTheOnlyComparator c ->
+      "wildcard req (${charsToString #[c]}) must be the only comparator in the version req"
+  | Error.UnexpectedAfterWildcard -> "unexpected character after wildcard in version req"
+  | Error.ExcessiveComparators -> "excessive number of version comparators"

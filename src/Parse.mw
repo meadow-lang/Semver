@@ -1,0 +1,293 @@
+-- Parsing: the crate's `src/parse.rs`. Positions are byte offsets into the
+-- text; every character the grammar accepts is ASCII.
+--
+-- Copyright David Tolnay, and the Meadow port's authors. Dual-licensed under
+-- Apache-2.0 or MIT: see COPYRIGHT.
+
+use Std.Collections.Vector as V
+use semver.Types
+use semver.Types.Error.*
+
+fun byteAt s i = if i < stringByteLength s then toInt (stringByteAt s i) else 0 - 1
+
+fun atEnd s i = i >= stringByteLength s
+
+-- The character starting at byte `i`.
+fun charAt s i = arrayGet (stringToChars (stringSlice s i (stringByteLength s))) 0
+
+fun isDigit b = b >= 48 and b <= 57
+
+fun skipSpaces s i = if byteAt s i == 32 then skipSpaces s (i + 1) else i
+
+-- u64::MAX is 18446744073709551615.
+def tenth = toUInt64 1844674407370955161
+
+-- A number with no leading zero, fitting 64 bits.
+fun numeric s i pos =
+  let rec go len value =
+    let b = byteAt s (i + len) in
+    if not (isDigit b)
+    then
+      if len > 0
+      then Ok (value, i + len)
+      else if atEnd s i
+      then Err (UnexpectedEnd pos)
+      else Err (UnexpectedChar pos (charAt s i))
+    else if value == toUInt64 0 and len > 0
+    then Err (LeadingZero pos)
+    else
+      let d = toUInt64 (b - 48) in
+      if value > tenth or (value == tenth and d > toUInt64 5)
+      then Err (Overflow pos)
+      else go (len + 1) (value * toUInt64 10 + d)
+  in
+  go 0 (toUInt64 0)
+
+-- The wildcard character at `i`, if there is one.
+fun wildcard s i =
+  let b = byteAt s i in
+  if b == 42 or b == 120 or b == 88 then Just (charFromCode b) else None
+
+fun dot s i pos =
+  if byteAt s i == 46
+  then Ok (i + 1)
+  else if atEnd s i
+  then Err (UnexpectedEnd pos)
+  else Err (UnexpectedCharAfter pos (charAt s i))
+
+fun isIdentByte b = (b >= 65 and b <= 90) or (b >= 97 and b <= 122) or b == 45
+
+-- `result`, unless the identifiers `s` in it are none at all.
+fun required pos s result = if s == "" then Err (EmptySegment pos) else Ok result
+
+-- Dot-separated identifiers of letters, digits and hyphens, perhaps none.
+fun identifier s i pos =
+  let rec go acc seg nondigit =
+    let b = byteAt s (i + acc + seg) in
+    if isIdentByte b
+    then go acc (seg + 1) True
+    else if isDigit b
+    then go acc (seg + 1) nondigit
+    else if seg == 0
+    then (if acc == 0 and b != 46 then Ok ("", i) else Err (EmptySegment pos))
+    else if pos == Position.Pre and seg > 1 and not nondigit and byteAt s (i + acc) == 48
+    then Err (LeadingZero pos)
+    else if b == 46
+    then go (acc + seg + 1) 0 False
+    else Ok (stringSlice s i (i + acc + seg), i + acc + seg)
+  in
+  go 0 0 False
+
+-- `version text`, or why it is not one.
+@pub fun parseVersion text =
+  if stringByteLength text == 0
+  then Err Empty
+  else
+    match numeric text 0 Position.Major with
+    | Err e -> Err e
+    | Ok (major, a) ->
+        match dot text a Position.Major with
+        | Err e -> Err e
+        | Ok b ->
+            match numeric text b Position.Minor with
+            | Err e -> Err e
+            | Ok (minor, c) ->
+                match dot text c Position.Minor with
+                | Err e -> Err e
+                | Ok d ->
+                    match numeric text d Position.Patch with
+                    | Err e -> Err e
+                    | Ok (patch, e) -> versionRest text major minor patch e
+
+fun versionRest text major minor patch at =
+  let base = Version { major = major, minor = minor, patch = patch, pre = "", build = "" } in
+  if atEnd text at
+  then Ok base
+  else
+    let preParsed =
+      if byteAt text at == 45
+      then
+        (
+          match identifier text (at + 1) Position.Pre with
+          | Err e -> Err e
+          | Ok (pre, next) -> required Position.Pre pre (pre, next, Position.Pre)
+        )
+      else Ok ("", at, Position.Patch)
+    in
+    match preParsed with
+    | Err e -> Err e
+    | Ok (pre, at2, pos) ->
+        let buildParsed =
+          if byteAt text at2 == 43
+          then
+            (
+              match identifier text (at2 + 1) Position.Build with
+              | Err e -> Err e
+              | Ok (build, next) -> required Position.Build build (build, next, Position.Build)
+            )
+          else Ok ("", at2, pos)
+        in
+        match buildParsed with
+        | Err e -> Err e
+        | Ok (build, at3, pos2) ->
+            if atEnd text at3
+            then Ok { base | pre = pre, build = build }
+            else Err (UnexpectedCharAfter pos2 (charAt text at3))
+
+fun op s i =
+  let b = byteAt s i in
+  let next = byteAt s (i + 1) in
+  if b == 61
+  then (Op.Exact, i + 1)
+  else if b == 62
+  then (if next == 61 then (Op.GreaterEq, i + 2) else (Op.Greater, i + 1))
+  else if b == 60
+  then (if next == 61 then (Op.LessEq, i + 2) else (Op.Less, i + 1))
+  else if b == 126
+  then (Op.Tilde, i + 1)
+  else if b == 94
+  then (Op.Caret, i + 1)
+  else (Op.Caret, i)
+
+-- One comparator from byte `i`: it, the position the parse ended in, and
+-- where it ended, trailing spaces skipped.
+fun comparator s i =
+  match op s i with
+  | (op0, afterOp) ->
+      let defaultOp = afterOp == i in
+      match numeric s (skipSpaces s afterOp) Position.Major with
+      | Err e -> Err e
+      | Ok (major, a) ->
+          let minorParsed =
+            if byteAt s a == 46
+            then
+              (
+                match wildcard s (a + 1) with
+                | Just _ ->
+                    let op1 = if defaultOp then Op.Wildcard else op0 in
+                    Ok (None, a + 2, Position.Minor, True, op1)
+                | None ->
+                    match numeric s (a + 1) Position.Minor with
+                    | Err e -> Err e
+                    | Ok (minor, b) -> Ok (Just minor, b, Position.Minor, False, op0)
+              )
+            else Ok (None, a, Position.Major, False, op0)
+          in
+          match minorParsed with
+          | Err e -> Err e
+          | Ok (minor, b, pos, hasWildcard, op1) ->
+              comparatorPatch s major minor b pos hasWildcard op1 defaultOp
+
+fun comparatorPatch s major minor at pos hasWildcard op1 defaultOp =
+  let patchParsed =
+    if byteAt s at == 46
+    then
+      (
+        match wildcard s (at + 1) with
+        | Just _ -> Ok (None, at + 2, Position.Patch, (if defaultOp then Op.Wildcard else op1))
+        | None ->
+            if hasWildcard
+            then Err UnexpectedAfterWildcard
+            else
+              match numeric s (at + 1) Position.Patch with
+              | Err e -> Err e
+              | Ok (patch, b) -> Ok (Just patch, b, Position.Patch, op1)
+      )
+    else Ok (None, at, pos, op1)
+  in
+  match patchParsed with
+  | Err e -> Err e
+  | Ok (patch, b, pos2, op2) ->
+      let hasPatch = patch != None in
+      let preParsed =
+        if hasPatch and byteAt s b == 45
+        then
+          (
+            match identifier s (b + 1) Position.Pre with
+            | Err e -> Err e
+            | Ok (pre, c) -> required Position.Pre pre (pre, c, Position.Pre)
+          )
+        else Ok ("", b, pos2)
+      in
+      match preParsed with
+      | Err e -> Err e
+      | Ok (pre, c, pos3) ->
+          let buildParsed =
+            if hasPatch and byteAt s c == 43
+            then
+              (
+                match identifier s (c + 1) Position.Build with
+                | Err e -> Err e
+                | Ok (build, d) -> required Position.Build build (d, Position.Build)
+              )
+            else Ok (c, pos3)
+          in
+          match buildParsed with
+          | Err e -> Err e
+          | Ok (d, pos4) ->
+              let cmp =
+                Comparator { op = op2, major = major, minor = minor, patch = patch, pre = pre }
+              in
+              Ok (cmp, pos4, skipSpaces s d)
+
+-- The comparators of a requirement from byte `i`, at most 32.
+fun comparators s i depth =
+  match comparator s i with
+  | Err e ->
+      (
+        match wildcard s i with
+        | Just ch ->
+            let rest = skipSpaces s (i + 1) in
+            if atEnd s rest or byteAt s rest == 44
+            then Err (WildcardNotTheOnlyComparator ch)
+            else Err e
+        | None -> Err e
+      )
+  | Ok (cmp, pos, next) ->
+      if atEnd s next
+      then Ok [cmp]
+      else if byteAt s next != 44
+      then Err (ExpectedCommaFound pos (charAt s next))
+      else if depth + 1 == 32
+      then Err ExcessiveComparators
+      else
+        match comparators s (skipSpaces s (next + 1)) (depth + 1) with
+        | Err e -> Err e
+        | Ok rest -> Ok (V.pushFront rest cmp)
+
+-- `text` as a requirement, such as `>=1.2.3, <1.8`, or why it is not one.
+@pub fun parseVersionReq text =
+  let start = skipSpaces text 0 in
+  match wildcard text start with
+  | Just ch ->
+      let rest = skipSpaces text (start + 1) in
+      if atEnd text rest
+      then Ok star
+      else if byteAt text rest == 44
+      then Err (WildcardNotTheOnlyComparator ch)
+      else Err UnexpectedAfterWildcard
+  | None ->
+      match comparators text start 0 with
+      | Err e -> Err e
+      | Ok cs -> Ok (VersionReq { comparators = cs })
+
+-- `text` as a single comparator, such as `^1.2`, or why it is not one.
+@pub fun parseComparator text =
+  match comparator text (skipSpaces text 0) with
+  | Err e -> Err e
+  | Ok (cmp, pos, next) ->
+      if atEnd text next then Ok cmp else Err (UnexpectedCharAfter pos (charAt text next))
+
+-- `text`, if it is a valid pre-release: dot-separated identifiers, numeric
+-- ones without leading zeros. The empty string is valid, meaning none.
+@pub fun prerelease text =
+  match identifier text 0 Position.Pre with
+  | Err e -> Err e
+  | Ok (pre, next) -> if atEnd text next then Ok pre else Err (IllegalCharacter Position.Pre)
+
+-- `text`, if it is valid build metadata: dot-separated identifiers. The empty
+-- string is valid, meaning none.
+@pub fun buildMetadata text =
+  match identifier text 0 Position.Build with
+  | Err e -> Err e
+  | Ok (build, next) -> if atEnd text next then Ok build else Err (IllegalCharacter Position.Build)
