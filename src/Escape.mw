@@ -1,6 +1,6 @@
 -- Which characters Rust's `{:?}` writes as `\u{…}`, from `Tables.mw`.
 
-use semver.Tables (escaped)
+use Semver.Tables (escaped)
 
 fun digit i = toInt (stringByteAt escaped i) - 48
 

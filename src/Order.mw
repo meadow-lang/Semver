@@ -6,7 +6,7 @@
 
 use Std.Collections.Vector as V
 use Std.String as S
-use semver.Types (Version)
+use Semver.Types (Version)
 
 fun isDigit c = charCode c >= 48 and charCode c <= 57
 

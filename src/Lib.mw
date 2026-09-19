@@ -4,7 +4,7 @@
 -- A port of Rust's `semver` crate, version 1.0.28. The tests hold it to the
 -- crate's answers, error messages included, for thousands of inputs.
 --
---   use semver
+--   use Semver
 --
 --   match (parseVersionReq ">=1.2.3, <1.8.0", parseVersion "1.4.0") with
 --   | (Ok req, Ok v) -> matches req v  -- True
@@ -21,7 +21,7 @@ mod Cases
 @cfg(test)
 mod Tests
 
-@pub use semver.Types (
+@pub use Semver.Types (
   Version,
   version,
   Op,
@@ -32,7 +32,7 @@ mod Tests
   Error,
   errorMessage
 )
-@pub use semver.Parse (parseVersion, parseVersionReq, parseComparator, prerelease, buildMetadata)
-@pub use semver.Order (compareVersions, comparePrecedence, comparePrerelease, compareBuildMetadata)
-@pub use semver.Eval (matches, matchesComparator)
-@pub use semver.Display (versionText, comparatorText, versionReqText)
+@pub use Semver.Parse (parseVersion, parseVersionReq, parseComparator, prerelease, buildMetadata)
+@pub use Semver.Order (compareVersions, comparePrecedence, comparePrerelease, compareBuildMetadata)
+@pub use Semver.Eval (matches, matchesComparator)
+@pub use Semver.Display (versionText, comparatorText, versionReqText)

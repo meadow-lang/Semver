@@ -11,13 +11,13 @@ included.
 ## Install
 
 ```sh
-meadow add mcdearman/meadow-semver
+meadow add mcdearman/MeadowSemver
 ```
 
 ## Use
 
 ```meadow
-use semver
+use Semver
 
 def main =
   match (parseVersionReq ">=1.2.3, <1.8.0", parseVersion "1.4.0") with

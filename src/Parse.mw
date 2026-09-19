@@ -5,8 +5,8 @@
 -- Apache-2.0 or MIT: see COPYRIGHT.
 
 use Std.Collections.Vector as V
-use semver.Types
-use semver.Types.Error.*
+use Semver.Types
+use Semver.Types.Error.*
 
 fun byteAt s i = if i < stringByteLength s then toInt (stringByteAt s i) else 0 - 1
 

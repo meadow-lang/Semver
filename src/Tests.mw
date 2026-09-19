@@ -11,17 +11,17 @@ use Std.Collections.Vector as V
 @cfg(test)
 use Std.String as S
 @cfg(test)
-use semver.Cases (cases)
+use Semver.Cases (cases)
 @cfg(test)
-use semver.Types
+use Semver.Types
 @cfg(test)
-use semver.Parse
+use Semver.Parse
 @cfg(test)
-use semver.Order
+use Semver.Order
 @cfg(test)
-use semver.Eval
+use Semver.Eval
 @cfg(test)
-use semver.Display
+use Semver.Display
 
 @cfg(test)
 fun digit i = toInt (stringByteAt cases i) - 48

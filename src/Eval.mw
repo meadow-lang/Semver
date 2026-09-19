@@ -4,8 +4,8 @@
 -- Apache-2.0 or MIT: see COPYRIGHT.
 
 use Std.Collections.Vector as V
-use semver.Types (Version, Comparator, VersionReq, Op)
-use semver.Order (comparePrerelease)
+use Semver.Types (Version, Comparator, VersionReq, Op)
+use Semver.Order (comparePrerelease)
 
 fun preCompare (v : Version) (c : Comparator) = comparePrerelease v.pre c.pre
 

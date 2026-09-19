@@ -5,7 +5,7 @@
 
 use Std.Collections.Vector as V
 use Std.String as S
-use semver.Types (Version, Comparator, VersionReq, Op)
+use Semver.Types (Version, Comparator, VersionReq, Op)
 
 -- `1.2.3-alpha+build`.
 @pub fun versionText (v : Version) =

@@ -8,7 +8,7 @@
 -- Copyright David Tolnay, and the Meadow port's authors. Dual-licensed under
 -- Apache-2.0 or MIT: see COPYRIGHT.
 
-use semver.Escape (isEscaped)
+use Semver.Escape (isEscaped)
 
 -- A version, as SemVer 2.0 defines one: `1.2.3-alpha.1+build.5`. `pre` and
 -- `build` are empty when the version has none.
