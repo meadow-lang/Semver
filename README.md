@@ -11,7 +11,7 @@ included.
 ## Install
 
 ```sh
-meadow add mcdearman/MeadowSemver
+meadow add mcdearman/Semver
 ```
 
 ## Use
