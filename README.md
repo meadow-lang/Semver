@@ -2,7 +2,7 @@
 
 Parse, order and match [Semantic Versioning 2.0](https://semver.org) versions,
 and version requirements written in Cargo's syntax, for
-[Meadow](https://github.com/mcdearman/meadow).
+[Meadow](https://github.com/meadow-lang/meadow).
 
 This package is a port of Rust's [`semver`](https://github.com/dtolnay/semver)
 1.0.28 by David Tolnay. It follows the crate's rules exactly, error messages
@@ -11,7 +11,7 @@ included.
 ## Install
 
 ```sh
-meadow add mcdearman/Semver
+meadow add meadow-lang/Semver
 ```
 
 ## Use
