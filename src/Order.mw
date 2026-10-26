@@ -20,15 +20,12 @@ fun byIdentifiers each a b =
   let xs = S.split "." a in
   let ys = S.split "." b in
   let rec go k =
-    if k >= V.len xs
-    then (if k >= V.len ys then Equal else Less)
-    else if k >= V.len ys
-    then Greater
+    if k >= V.len xs then (if k >= V.len ys then Equal else Less)
+    else if k >= V.len ys then Greater
     else
       let o = each (V.getOr "" xs k) (V.getOr "" ys k) in
       if o == Equal then go (k + 1) else o
-  in
-  go 0
+  in go 0
 
 fun preIdentifier x y =
   match (allDigits x, allDigits y) with
@@ -48,9 +45,8 @@ fun buildIdentifier x y =
       -- 0 < 00 < 1 < 01 < 001 < 2 < 02 < 002 < 10
       let xv = trimZeros x in
       let yv = trimZeros y in
-      orElse
-      (compare (stringByteLength xv) (stringByteLength yv))
-      (\_ -> orElse (S.compare xv yv) (\_ -> compare (stringByteLength x) (stringByteLength y)))
+      orElse (compare (stringByteLength xv) (stringByteLength yv)) (\_ ->
+        orElse (S.compare xv yv) (\_ -> compare (stringByteLength x) (stringByteLength y)))
   | (True, False) -> Less
   | (False, True) -> Greater
   | (False, False) -> S.compare x y
@@ -58,12 +54,9 @@ fun buildIdentifier x y =
 -- How two pre-releases order: no pre-release at all is greatest; numeric
 -- identifiers compare as numbers and before any others.
 @pub fun comparePrerelease a b =
-  if a == b
-  then Equal
-  else if a == ""
-  then Greater
-  else if b == ""
-  then Less
+  if a == b then Equal
+  else if a == "" then Greater
+  else if b == "" then Less
   else byIdentifiers preIdentifier a b
 
 -- How two sets of build metadata order. SemVer gives build metadata no

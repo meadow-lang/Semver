@@ -22,15 +22,7 @@ mod Cases
 mod Tests
 
 @pub use Semver.Types (
-  Version,
-  version,
-  Op,
-  Comparator,
-  VersionReq,
-  star,
-  Position,
-  Error,
-  errorMessage
+  Version, version, Op, Comparator, VersionReq, star, Position, Error, errorMessage
 )
 @pub use Semver.Parse (parseVersion, parseVersionReq, parseComparator, prerelease, buildMetadata)
 @pub use Semver.Order (compareVersions, comparePrecedence, comparePrerelease, compareBuildMetadata)

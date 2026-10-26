@@ -34,8 +34,7 @@ fun opText op =
         match c.patch with
         | Just patch -> ".${minor}.${patch}" ++ (if c.pre == "" then "" else "-" ++ c.pre)
         | None -> ".${minor}" ++ wild
-  in
-  opText c.op ++ "${c.major}" ++ rest
+  in opText c.op ++ "${c.major}" ++ rest
 
 -- The comparators joined with `, `, or `*` for none.
 @pub fun versionReqText (r : VersionReq) =

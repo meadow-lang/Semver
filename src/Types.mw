@@ -32,9 +32,8 @@ use Semver.Escape (isEscaped)
 
 -- How a comparator compares.
 @derive(PartialEq)
-@pub data Op =
-  -- `=I.J.K`: exactly this version; `=I.J` and `=I` any version they start.
-  Exact
+@pub data Op
+  = Exact -- `=I.J.K`: exactly this version; `=I.J` and `=I` any version they start.
   -- `>I.J.K`, `>I.J`, `>I`
   | Greater
   -- `>=I.J.K`, `>=I.J`, `>=I`
@@ -61,7 +60,9 @@ use Semver.Escape (isEscaped)
 
 -- A requirement: the comparators a version has to satisfy, all of them. None
 -- at all is `*`, which every release satisfies.
-@pub record VersionReq = { comparators : [Comparator] }
+@pub record VersionReq = {
+  comparators : [Comparator]
+}
 
 @pub def star = VersionReq { comparators = [] }
 
@@ -69,8 +70,8 @@ use Semver.Escape (isEscaped)
 @derive(PartialEq)
 @pub data Position = Major | Minor | Patch | Pre | Build
 
-@pub data Error =
-  Empty
+@pub data Error
+  = Empty
   | UnexpectedEnd Position
   | UnexpectedChar Position Char
   | UnexpectedCharAfter Position Char
@@ -102,23 +103,15 @@ fun hexDigits n =
 @pub(pkg) fun quoted c =
   let cp = charCode c in
   let body =
-    if cp == 0
-    then "\\0"
-    else if cp == 9
-    then "\\t"
-    else if cp == 13
-    then "\\r"
-    else if cp == 10
-    then "\\n"
-    else if cp == 92
-    then "\\\\"
-    else if cp == 39
-    then "\\'"
-    else if isEscaped cp
-    then "\\u{" ++ hexDigits cp ++ "}"
+    if cp == 0 then "\\0"
+    else if cp == 9 then "\\t"
+    else if cp == 13 then "\\r"
+    else if cp == 10 then "\\n"
+    else if cp == 92 then "\\\\"
+    else if cp == 39 then "\\'"
+    else if isEscaped cp then "\\u{" ++ hexDigits cp ++ "}"
     else charsToString #[c]
-  in
-  "'" ++ body ++ "'"
+  in "'" ++ body ++ "'"
 
 -- What went wrong, as the crate says it.
 @pub fun errorMessage e =
