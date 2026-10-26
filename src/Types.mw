@@ -33,8 +33,7 @@ use Semver.Escape (isEscaped)
 -- How a comparator compares.
 @derive(PartialEq)
 @pub data Op
-  = -- `=I.J.K`: exactly this version; `=I.J` and `=I` any version they start.
-  Exact
+  = Exact -- `=I.J.K`: exactly this version; `=I.J` and `=I` any version they start.
   -- `>I.J.K`, `>I.J`, `>I`
   | Greater
   -- `>=I.J.K`, `>=I.J`, `>=I`
