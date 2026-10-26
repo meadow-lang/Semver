@@ -11,64 +11,45 @@ fun preCompare (v : Version) (c : Comparator) = comparePrerelease v.pre c.pre
 
 fun matchesExact (c : Comparator) (v : Version) =
   v.major == c.major
-    and (
-      match c.minor with
-      | Just m -> v.minor == m
-      | None -> True
-    )
-    and (
-      match c.patch with
-      | Just p -> v.patch == p
-      | None -> True
-    )
+    and (match c.minor with | Just m -> v.minor == m | None -> True)
+    and (match c.patch with | Just p -> v.patch == p | None -> True)
     and v.pre == c.pre
 
 fun matchesGreater (c : Comparator) (v : Version) =
-  if v.major != c.major
-  then v.major > c.major
+  if v.major != c.major then v.major > c.major
   else
     match c.minor with
     | None -> False
     | Just minor ->
-        if v.minor != minor
-        then v.minor > minor
+        if v.minor != minor then v.minor > minor
         else
           match c.patch with
           | None -> False
           | Just patch -> if v.patch != patch then v.patch > patch else preCompare v c == Greater
 
 fun matchesLess (c : Comparator) (v : Version) =
-  if v.major != c.major
-  then v.major < c.major
+  if v.major != c.major then v.major < c.major
   else
     match c.minor with
     | None -> False
     | Just minor ->
-        if v.minor != minor
-        then v.minor < minor
+        if v.minor != minor then v.minor < minor
         else
           match c.patch with
           | None -> False
           | Just patch -> if v.patch != patch then v.patch < patch else preCompare v c == Less
 
 fun matchesTilde (c : Comparator) (v : Version) =
-  if v.major != c.major
-  then False
-  else if (
-  match c.minor with
-  | Just m -> v.minor != m
-  | None -> False
-  )
-then False
-else
-  match c.patch with
-  | Just patch -> if v.patch != patch then v.patch > patch else preCompare v c != Less
-  | None -> preCompare v c != Less
+  if v.major != c.major then False
+  else if (match c.minor with | Just m -> v.minor != m | None -> False) then False
+  else
+    match c.patch with
+    | Just patch -> if v.patch != patch then v.patch > patch else preCompare v c != Less
+    | None -> preCompare v c != Less
 
 fun matchesCaret (c : Comparator) (v : Version) =
   let zero = toUInt64 0 in
-  if v.major != c.major
-  then False
+  if v.major != c.major then False
   else
     match c.minor with
     | None -> True
@@ -76,22 +57,15 @@ fun matchesCaret (c : Comparator) (v : Version) =
         match c.patch with
         | None -> if c.major > zero then v.minor >= minor else v.minor == minor
         | Just patch ->
-            if c.major > zero
-            then
-              if v.minor != minor
-              then v.minor > minor
-              else if v.patch != patch
-              then v.patch > patch
+            if c.major > zero then
+              if v.minor != minor then v.minor > minor
+              else if v.patch != patch then v.patch > patch
               else preCompare v c != Less
-            else if minor > zero
-            then
-              if v.minor != minor
-              then False
-              else if v.patch != patch
-              then v.patch > patch
+            else if minor > zero then
+              if v.minor != minor then False
+              else if v.patch != patch then v.patch > patch
               else preCompare v c != Less
-            else if v.minor != minor or v.patch != patch
-            then False
+            else if v.minor != minor or v.patch != patch then False
             else preCompare v c != Less
 
 fun matchesImpl (c : Comparator) (v : Version) =

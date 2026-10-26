@@ -42,13 +42,11 @@ fun str i =
 @cfg(test)
 fun strs i n =
   let rec go k at acc =
-    if k >= n
-    then (acc, at)
+    if k >= n then (acc, at)
     else
       let s = str at in
       go (k + 1) (snd s) (V.pushBack acc (fst s))
-  in
-  go 0 i V.empty
+  in go 0 i V.empty
 
 @cfg(test)
 fun opIndex op =
@@ -63,10 +61,7 @@ fun opIndex op =
   | Op.Wildcard -> 7
 
 @cfg(test)
-fun optText m =
-  match m with
-  | Just n -> "${n}"
-  | None -> "-"
+fun optText m = match m with | Just n -> "${n}" | None -> "-"
 
 @cfg(test)
 fun comparatorFields (c : Comparator) =
@@ -84,13 +79,8 @@ fun readComparator i =
 @cfg(test)
 fun readResult i ok =
   let flag = num i 1 in
-  if fst flag == 1
-  then
-    let r = ok (snd flag) in
-    (V.pushFront (fst r) "ok", snd r)
-  else
-    let e = str (snd flag) in
-    (["error", fst e], snd e)
+  if fst flag == 1 then let r = ok (snd flag) in (V.pushFront (fst r) "ok", snd r)
+  else let e = str (snd flag) in (["error", fst e], snd e)
 
 @cfg(test)
 fun resultFields r fields =
@@ -102,15 +92,13 @@ fun resultFields r fields =
 fun readReq i =
   let n = num i 2 in
   let rec go k at acc =
-    if k >= fst n
-    then
+    if k >= fst n then
       let d = str at in
       (V.pushBack (V.pushFront acc "${fst n}") (fst d), snd d)
     else
       let c = readComparator at in
       go (k + 1) (snd c) (V.append acc (fst c))
-  in
-  go 0 (snd n) V.empty
+  in go 0 (snd n) V.empty
 
 @cfg(test)
 fun reqFields (r : VersionReq) =
@@ -130,23 +118,16 @@ fun ordIndex o =
   | Greater -> 2
 
 @cfg(test)
-fun unwrap r =
-  match r with
-  | Ok v -> v
-  | Err e -> version 0 0 0
+fun unwrap r = match r with | Ok v -> v | Err e -> version 0 0 0
 
 @cfg(test)
-fun unwrapReq r =
-  match r with
-  | Ok v -> v
-  | Err e -> star
+fun unwrapReq r = match r with | Ok v -> v | Err e -> star
 
 -- One case at `i`: `(input, expected, actual, next)`.
 @cfg(test)
 fun runCase i =
   let kind = fst (num i 1) in
-  if kind == 0
-  then
+  if kind == 0 then
     let t = str (i + 1) in
     let s = fst t in
     let v = readResult (snd t) (\at -> strs at 6) in
@@ -163,10 +144,8 @@ fun runCase i =
         resultFields (prerelease s) (\x -> [x]),
         resultFields (buildMetadata s) (\x -> [x])
       ]
-    in
-    (s, expected, actual, snd b)
-  else if kind == 1
-  then
+    in (s, expected, actual, snd b)
+  else if kind == 1 then
     let a = str (i + 1) in
     let b = str (snd a) in
     let o = strs (snd b) 0 in
@@ -175,18 +154,13 @@ fun runCase i =
     let va = unwrap (parseVersion (fst a)) in
     let vb = unwrap (parseVersion (fst b)) in
     let actual =
-      [
-        V.map
-          (\o2 -> "${ordIndex o2}")
-          [
-            compareVersions va vb,
-            comparePrecedence va vb,
-            comparePrerelease va.pre vb.pre,
-            compareBuildMetadata va.build vb.build
-          ]
-      ]
-    in
-    (fst a ++ " vs " ++ fst b, expected, actual, at + 4)
+      [V.map (\o2 -> "${ordIndex o2}") [
+         compareVersions va vb,
+         comparePrecedence va vb,
+         comparePrerelease va.pre vb.pre,
+         compareBuildMetadata va.build vb.build
+       ]]
+    in (fst a ++ " vs " ++ fst b, expected, actual, at + 4)
   else
     let r = str (i + 1) in
     let v = str (snd r) in
@@ -203,8 +177,7 @@ fun runCase i =
 
 @cfg(test)
 fun check i bad =
-  if i >= stringByteLength cases
-  then bad
+  if i >= stringByteLength cases then bad
   else
     match runCase i with
     | (input, expected, got, next) ->
@@ -229,7 +202,6 @@ fun check i bad =
       (compareVersions (unwrap (parseVersion "1.0.0-a.10")) (unwrap (parseVersion "1.0.0-a.9")))
       Greater
       "numeric identifiers"
-  in
-  match parseVersion "1.2.03" with
-  | Err err -> assertEq (errorMessage err) "invalid leading zero in patch version number" "error"
-  | Ok v -> assertEq (versionText v) "an error" "error"
+  in match parseVersion "1.2.03" with
+     | Err err -> assertEq (errorMessage err) "invalid leading zero in patch version number" "error"
+     | Ok v -> assertEq (versionText v) "an error" "error"
